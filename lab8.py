@@ -10,8 +10,6 @@ def get_ancestors(net, var):
     "Return a set containing the ancestors of var"
     anscestors = set()
 
-
-
     for p in net.get_parents(var):
         anscestors.update(get_ancestors(net, p))
 
@@ -114,12 +112,13 @@ def probability_conditional(net, hypothesis, givens=None):
     if not givens:
         return probability_marginal(net, hypothesis)
 
-    # TODO make more general
-    if list(hypothesis.keys())[0] == list(givens.keys())[0]:
-        if hypothesis[list(hypothesis.keys())[0]] != givens[list(givens.keys())[0]]:
-            return 0.0
-        else:
-            return 1.0
+    for i in hypothesis:
+        for j in givens:
+            if i == j:
+                if hypothesis[i] != givens[j]:
+                    return 0.0
+                else:
+                    return 1.0
 
     total_dict = dict(hypothesis, **givens)
 
@@ -128,7 +127,6 @@ def probability_conditional(net, hypothesis, givens=None):
 
 def probability(net, hypothesis, givens=None):
     "Calls previous functions to compute any probability"
-
     if not givens:
         return probability_conditional(net, hypothesis)
     else:
@@ -165,15 +163,76 @@ def is_independent(net, var1, var2, givens=None):
     Return True if var1, var2 are conditionally independent given givens,
     otherwise False. Uses numerical independence.
     """
-    raise NotImplementedError
-    
+
+    var1_permutations = net.combinations([var1])
+    var2_permutations = net.combinations([var2])
+
+    if not givens:
+        givens = {}
+
+
+    for i in var1_permutations:
+        for j in var2_permutations:
+            j = dict(j, **givens)
+            if approx_equal(probability(net, i, j), probability(net, i, givens)):
+                return True
+
+    return False
+
+
 def is_structurally_independent(net, var1, var2, givens=None):
     """
     Return True if var1, var2 are conditionally independent given givens,
     based on the structure of the Bayes net, otherwise False.
     Uses structural independence only (not numerical independence).
     """
-    raise NotImplementedError
+
+    var_list = get_ancestors(net, var1) | get_ancestors(net, var2)
+
+    var_list.add(var1)
+    var_list.add(var2)
+
+
+    givens_list = set()
+
+    if givens:
+        for key in givens:
+            givens_list.update(get_ancestors(net, key))
+            givens_list.add(key)
+
+    var_list.update(givens_list)
+
+    subnet = net.subnet(list(var_list))
+
+    for node1 in subnet.get_variables():
+        for node2 in subnet.get_variables():
+            if node1 == node2:
+                continue
+            subset1 = net.get_children(node1).intersection(net.get_children(node2))
+            subset2 = subset1.intersection(subnet.get_variables())
+            
+            
+            if len(subset2) != 0:
+                print('link', node1, node2)
+                subnet.link(node1, node2)
+
+
+
+
+
+
+    subnet = subnet.make_bidirectional()
+
+    if givens:
+        for key in givens:
+            if key in subnet.get_variables():
+                subnet.remove_variable(key)
+
+    if subnet.find_path(var1, var2):
+        return False
+
+    return True
+
 
 
 #### SURVEY ####################################################################
